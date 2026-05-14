@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Echo of Paws - เสียงสะท้อนจากดวงดาว</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@200;300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #030303;
+            color: #d1d1d1;
+            font-family: 'Kanit', sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            user-select: none;
+        }
+
+        /* Particle Background */
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            opacity: 0.6;
+        }
+
+        /* Main Container */
+        #game-container {
+            position: relative;
+            z-index: 10;
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 300px;
+        }
+
+        /* Text Styles */
+        #story-text {
+            font-size: 1.5rem;
+            font-weight: 300;
+            line-height: 1.8;
+            letter-spacing: 0.5px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 2s ease, transform 2s ease;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+        }
+
+        #story-text.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Action/Button Styles */
+        .action-btn {
+            margin-top: 40px;
+            background: transparent;
+            border: 1px solid #444;
+            color: #888;
+            padding: 12px 30px;
+            font-family: 'Kanit', sans-serif;
+            font-size: 1rem;
+            font-weight: 300;
+            cursor: pointer;
+            border-radius: 50px;
+            transition: all 0.5s ease;
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .action-btn.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .action-btn:hover {
+            border-color: #fff;
+            color: #fff;
+            box-shadow: 0 0 15px rgba(255,255,255,0.2);
+        }
+
+        /* Final Phase Styles */
+        #final-phase {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            opacity: 0;
+            transition: opacity 2s ease;
+        }
+
+        #final-phase.visible {
+            opacity: 1;
+        }
+
+        .input-group {
+            margin-bottom: 30px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid #555;
+            color: #fff;
+            font-family: 'Kanit', sans-serif;
+            font-size: 1.5rem;
+            text-align: center;
+            padding: 10px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            border-bottom: 1px solid #fff;
+        }
+
+        input[type="text"]::placeholder {
+            color: #333;
+        }
+
+        #reason-box {
+            margin-top: 30px;
+            font-size: 1.6rem;
+            font-weight: 400;
+            color: #fff;
+            line-height: 1.6;
+            text-shadow: 0 0 20px rgba(255,255,255,0.3);
+            display: none;
+            opacity: 0;
+            transition: opacity 2s ease;
+        }
+
+        #reason-box.visible {
+            display: block;
+            opacity: 1;
+        }
+
+        .footer-credit {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #444;
+            z-index: 10;
+            letter-spacing: 1px;
+            opacity: 0;
+            transition: opacity 3s ease;
+        }
+
+        .footer-credit.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Particle Background -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div id="game-container">
+        <!-- Story Phase -->
+        <div id="story-text"></div>
+        <button id="next-btn" class="action-btn">ก้าวเดินต่อไป</button>
+
+        <!-- Final Interaction Phase -->
+        <div id="final-phase">
+            <div id="final-prompt" style="font-size: 1.2rem; font-weight: 300; margin-bottom: 20px; color: #888;">
+                แมวตัวนั้นได้ข้ามสะพานดวงดาวไปแล้ว...<br>แต่คุณยังคงอยู่ที่นี่ โปรดบอกชื่อของคุณ
+            </div>
+            <div class="input-group">
+                <input type="text" id="player-name" placeholder="ชื่อของคุณ..." autocomplete="off">
+            </div>
+            <button id="submit-btn" class="action-btn visible" style="margin-top: 0;">ค้นหาความหมาย</button>
+            <div id="reason-box"></div>
+        </div>
+    </div>
+
+    <div id="footer" class="footer-credit">เกมส์นี้สร้างขึ้นเพื่อให้กำลังใจของทีมงานสิบศิลป์สิริศาสตร์</div>
+
+    <script>
+        // --- Particle System (Background Effects) ---
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let particles = [];
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height + height;
+                this.size = Math.random() * 1.5 + 0.5;
+                this.speedY = Math.random() * 0.5 + 0.1;
+                this.speedX = (Math.random() - 0.5) * 0.3;
+                this.opacity = Math.random() * 0.5;
+            }
+            update() {
+                this.y -= this.speedY;
+                this.x += this.speedX;
+                if (this.y < -10) {
+                    this.y = height + 10;
+                    this.x = Math.random() * width;
+                }
+            }
+            draw() {
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < 150; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateCanvas() {
+            ctx.clearRect(0, 0, width, height);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(animateCanvas);
+        }
+        animateCanvas();
+
+        // --- Story Data ---
+        const storyLines = [
+            "ความมืดโอบกอดฉันไว้... ไร้ซึ่งรูปทรง ไร้ซึ่งเสียงใดๆ",
+            "ฉันตื่นขึ้นมาในสถานที่ที่ไม่มีแสงแดด ไม่มีเสียงชามข้าวกระทบพื้น... ไม่มีกลิ่นของคุณ",
+            "อุ้งเท้าของฉันสัมผัสได้เพียงความเย็นเยียบของหมอกควัน ฉันพยายามร้องเรียก... แต่มันไม่มีเสียงเล็ดลอดออกมา",
+            "ท่ามกลางความอ้างว้าง ฉันเห็นภาพสะท้อนบางอย่าง... มันคือความทรงจำของเรา",
+            "ภาพของคุณที่กำลังอุ้มฉันตอนตัวเท่าฝ่ามือ ภาพที่เรานอนกอดกันในบ่ายวันอาทิตย์ที่ฝนตก",
+            "และภาพสุดท้าย... วันที่ฉันหลับตาลงบนตักที่อบอุ่นที่สุดในโลก พร้อมกับหยดน้ำตาของคุณที่ร่วงหล่น",
+            "ฉันพยายามจะเอาหัวถูไถมือคุณ เพื่อปลอบประโลม... แต่วิญญาณของฉันทะลุผ่านตัวคุณไป",
+            "ที่นี่คือโลกหลังความตาย... โลกที่สรรพสัตว์ต้องละทิ้งร่างเดิมเพื่อเดินทางต่อ",
+            "มีแสงสว่างนวลตาอยู่ที่ปลายทาง... เสียงเรียกจากเพื่อนสี่ขาที่ล่วงลับไปก่อนหน้าดังแว่วมา",
+            "ฉันรู้ว่าฉันต้องข้าม 'สะพานดวงดาว' นั้นไป... ที่นั่นฉันจะไม่เจ็บปวดและไม่ต้องกินยาขมๆ อีกแล้ว",
+            "แต่สิ่งเดียวที่รั้งฉันไว้... คือความเป็นห่วงคุณที่ยังอยู่ทางนั้น",
+            "ฉันไม่สามารถนอนซบคุณในวันที่โลกใจร้ายใส่คุณได้อีกแล้ว",
+            "แต่อยากให้คุณรู้ไว้... ทุกครั้งที่สายลมพัดผ่าน ทุกครั้งที่แสงแดดอุ่นสัมผัสผิว... ฉันยังอยู่ตรงนั้นเสมอ ในความทรงจำ",
+            "ได้โปรด... อนุญาตให้ฉันไปอย่างสงบ และขอให้คุณเข้มแข็ง",
+            "ใช้ชีวิตในส่วนที่เหลือ... เพื่อฉันนะ"
+        ];
+
+        // --- 20 Deep Reasons ---
+        const reasonsToLive = [
+            "ท้องฟ้าในวันพรุ่งนี้อาจจะมีก้อนเมฆรูปทรงแปลกตา ที่คุณยังไม่เคยเห็นรออยู่",
+            "กลิ่นกาแฟในยามเช้า หรือชาแก้วโปรด ยังคงเฝ้ารอที่จะมอบความอบอุ่นให้คุณอีกครั้ง",
+            "ยังมีหนังสืออีกหลายเล่มที่ถูกเขียนขึ้นมาเพื่อเปลี่ยนชีวิตคุณ และคุณยังไม่ได้เปิดอ่านมัน",
+            "รอยยิ้มของใครบางคนที่คุณอาจจะเดินสวนกันในวันพรุ่งนี้ อาจต้องการคุณเป็นเหตุผล",
+            "ความเจ็บปวดในวันนี้ คือหลักฐานที่งดงามที่สุดว่าคุณรักและผูกพันกับสิ่งรอบตัวมากแค่ไหน",
+            "เพลงโปรดของคุณยังมีท่อนฮุคที่คุณอาจจะลืมไปแล้ว รอให้คุณกลับไปฟังและร้องตามอย่างสุดเสียง",
+            "แมวหรือหมาจรจัดข้างทางในวันพรุ่งนี้ อาจจะรอการลูบหัวอย่างอ่อนโยนจากคุณเพียงคนเดียว",
+            "โลกนี้ยังมีฤดูกาลที่เปลี่ยนผ่าน มีลมหนาวที่พัดพาความเหงา และแสงแดดที่คอยเยียวยา",
+            "ยังมีอาหารอร่อยๆ อีกนับไม่ถ้วนบนโลกใบนี้ ที่คุณยังไม่ได้ลิ้มลองรสชาติของมัน",
+            "หยดน้ำตาของคุณในวันนี้ จะตกผลึกกลายเป็นความเข้มแข็งที่คุณจะนึกขอบคุณในวันข้างหน้า",
+            "ร่องรอยบาดแผลที่คุณแบกรับ คือศิลปะแห่งการเอาชีวิตรอดที่ล้ำค่าและงดงามที่สุด",
+            "ยังมีสถานที่อีกมากมายบนโลกใบนี้ ที่เฝ้ารอให้รอยเท้าของคุณไปประทับ",
+            "ใครบางคนในอนาคตกำลังรอคอยที่จะได้พบกับคนแบบคุณ คนที่ผ่านพายุมาได้อย่างสง่างาม",
+            "การยังคงหายใจอยู่ของคุณในวันนี้ คือการกบฏที่ยิ่งใหญ่ที่สุดต่อความสิ้นหวังทั้งปวง",
+            "วันหนึ่งคุณจะตื่นขึ้นมาแล้วพบว่า ความมืดมิดนั้นเป็นเพียงร่มเงาให้พักพิง ไม่ใช่คุกที่กักขังคุณตลอดไป",
+            "คุณยังไม่ได้เห็นตัวเองในเวอร์ชั่นที่มีความสุขและเปล่งประกายที่สุดเลยนะ ให้เวลาตัวเองอีกนิดเถอะ",
+            "โลกใบนี้จะสูญเสียโทนสีที่สำคัญไปหนึ่งสี หากไม่มีคุณคอยแต่งแต้มมันด้วยชีวิตของคุณ",
+            "ความฝันที่คุณเคยพับเก็บไว้ในลิ้นชักที่ลึกที่สุด ยังคงเฝ้ารอวันที่คุณจะเปิดมันออกมาอีกครั้ง",
+            "ทุกลมหายใจเข้าออกของคุณ คือจังหวะดนตรีที่ธรรมชาติมอบให้เป็นของขวัญเฉพาะคุณคนเดียว",
+            "เพราะการเดินทางของคุณ... ยังมีฉากจบที่งดงามและเปี่ยมความหมายกว่านี้รออยู่เบื้องหน้า"
+        ];
+
+        // --- Game Logic ---
+        const storyTextEl = document.getElementById('story-text');
+        const nextBtn = document.getElementById('next-btn');
+        const finalPhase = document.getElementById('final-phase');
+        const playerNameInput = document.getElementById('player-name');
+        const submitBtn = document.getElementById('submit-btn');
+        const reasonBox = document.getElementById('reason-box');
+        const footer = document.getElementById('footer');
+
+        let currentLine = 0;
+
+        function showStoryLine() {
+            storyTextEl.classList.remove('visible');
+            nextBtn.classList.remove('visible');
+            
+            setTimeout(() => {
+                if (currentLine < storyLines.length) {
+                    storyTextEl.innerHTML = storyLines[currentLine];
+                    storyTextEl.classList.add('visible');
+                    
+                    // Show button after reading time
+                    setTimeout(() => {
+                        nextBtn.classList.add('visible');
+                    }, 1500);
+                } else {
+                    enterFinalPhase();
+                }
+            }, 1000); // Wait for fade out
+        }
+
+        function enterFinalPhase() {
+            storyTextEl.style.display = 'none';
+            nextBtn.style.display = 'none';
+            
+            finalPhase.style.display = 'flex';
+            setTimeout(() => {
+                finalPhase.classList.add('visible');
+            }, 100);
+        }
+
+        nextBtn.addEventListener('click', () => {
+            currentLine++;
+            showStoryLine();
+        });
+
+        submitBtn.addEventListener('click', () => {
+            const name = playerNameInput.value.trim();
+            if (name === '') {
+                playerNameInput.style.borderBottomColor = '#ff4d4d';
+                setTimeout(() => playerNameInput.style.borderBottomColor = '#555', 1000);
+                return;
+            }
+
+            // Hide inputs
+            playerNameInput.style.display = 'none';
+            submitBtn.style.display = 'none';
+            document.getElementById('final-prompt').style.display = 'none';
+
+            // Randomize reason
+            const randomIndex = Math.floor(Math.random() * reasonsToLive.length);
+            const selectedReason = reasonsToLive[randomIndex];
+
+            // Show reason
+            reasonBox.innerHTML = `แด่ ${name},<br><br><span style="font-size: 1.2rem; color: #aaa;">เหตุผลที่คุณควรจะมีชีวิตอยู่ต่อไป...</span><br><br>"${selectedReason}"`;
+            reasonBox.classList.add('visible');
+            
+            // Show Footer
+            setTimeout(() => {
+                footer.classList.add('visible');
+            }, 2000);
+        });
+
+        // Initialize Game
+        setTimeout(showStoryLine, 1000);
+
+    </script>
+</body>
+</html>
